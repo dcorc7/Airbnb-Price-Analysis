@@ -1,0 +1,18 @@
+---
+title: Analyzing Airbnb Feature that Influence Rental Pricing Decisions
+---
+
+
+# Overview
+
+
+
+# Methods
+
+- **T-Tests:** 
+
+- **Analysis of Variance Tests (ANOVA):** 
+
+- **Correlation Tests:** 
+
+- **Chi Squared Tests of Independence:**
