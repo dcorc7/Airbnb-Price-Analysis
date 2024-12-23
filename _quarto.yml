@@ -31,6 +31,6 @@ format:
     toc: true
     toc-location: left
     toc-title: Table of Contents
-
+    css: ./stylehseets/styles.css
 
 
