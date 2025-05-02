@@ -1,0 +1,147 @@
+```{r}
+# Import libraries
+library(ggplot2)
+library(tidyverse)
+library(ggmap)
+library(maps)
+library(sf)
+```
+
+```{r}
+# Import data
+calendar_df <- read.csv("./boston_data/calendar.csv.gz")
+listings_df <- read.csv("./boston_data/listings.csv.gz")
+reviews_df <- read.csv("./boston_data/reviews.csv.gz")
+
+ncol(listings_df)
+nrow(listings_df)
+```
+
+```{r}
+# Select only relevant columns
+columns_to_keep <- c("id", "host_id", "host_response_time", "host_response_rate", "host_is_superhost", 
+                    "neighbourhood_cleansed", "property_type", "room_type", "accommodates", "bathrooms", 
+                    "bedrooms", "beds", "amenities", "price", "minimum_nights", "availability_30", "availability_365", 
+                    "number_of_reviews", "last_review", "review_scores_rating", "review_scores_location", 
+                    "reviews_per_month", "longitude", "latitude", "host_identity_verified", "host_total_listings_count")
+
+# Remove all unecessary columns
+airbnb_df <- listings_df[, columns_to_keep]
+
+# Convert data to numeric and remove dollar signs
+airbnb_df$price <- as.numeric(gsub("[$,]", "", airbnb_df$price))
+
+# Remove NA values in the price and location columns
+airbnb_df <- airbnb_df[!is.na(airbnb_df$price), ]
+#airbnb_df <- airbnb_df[!is.na(airbnb_df$longitude), ]
+#airbnb_df <- airbnb_df[!is.na(airbnb_df$latitude), ]
+
+# Convert host_response_rate to numeric after removing the '%' sign
+airbnb_df$host_response_rate <- as.numeric(gsub("%", "", airbnb_df$host_response_rate))
+#airbnb_df <- na.omit(airbnb_df)
+
+nrow(airbnb_df)
+
+```
+
+
+```{r}
+# Stadia API necessary to access ggmap
+stadia_maps_api_key <- "47408938-7f6d-4ab3-9cd0-0ff15b953c93"
+register_stadiamaps(stadia_maps_api_key)
+
+# Calculate price mean and sd to remove outliers
+price_mean <- mean(airbnb_df$price)
+price_sd <- sd(airbnb_df$price)
+
+# Calcualte IQR to remove outliers (Just another option)
+Q1 <- quantile(airbnb_df$price, 0.25)
+Q3 <- quantile(airbnb_df$price, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 - (1.5 * IQR)
+upper_bound <- Q3 + (1.5 * IQR)
+
+# Remove price outliers (values above 1 standard deviation away from the mean)
+#airbnb_df_no_outliers <- airbnb_df[((airbnb_df$price - price_mean) / price_sd) < 1, ]
+
+# Remove price outliers (values above the upper_bound)
+airbnb_df_no_outliers <- airbnb_df[(airbnb_df$price <= upper_bound), ]
+
+# Order listings by price
+airbnb_df_no_outliers <- airbnb_df_no_outliers[order(airbnb_df_no_outliers$price, decreasing = FALSE), ]
+
+# Remove NA values in the price column
+airbnb_df_no_outliers <- airbnb_df_no_outliers[!is.na(airbnb_df_no_outliers$price), ]
+nrow(airbnb_df_no_outliers)
+```
+
+```{r}
+# Create a boundary box for the maps
+bbox <- make_bbox(data = airbnb_df_no_outliers,
+                  lon = longitude,
+                  lat = latitude)
+
+map <- get_stadiamap(bbox,
+                     maptype = "stamen_toner_lite",
+                     zoom = 12)
+```
+
+```{r}
+# Geospacial plot of Airbnb location data
+ggmap(map) +
+  geom_point(data = airbnb_df_no_outliers,
+            aes(x = longitude, y = latitude),
+            color = "blue")
+```
+
+```{r}
+# Geospacial plot of Airbnb location data where price is on a color scale
+ggmap(map) +
+  geom_point(data = airbnb_df_no_outliers,
+            aes(x = longitude, y = latitude, color = price)) +
+  scale_color_gradientn(colors = c("purple", "blue", "green", "yellow", "red")) +
+  labs(x = "Longitude",
+       y = "Latitude",
+       title = "Distribution of Airbnb Listings in Boston",
+       color = "Price ($)"
+       ) +
+  theme(
+    plot.title = element_text(size = 20, face = "bold"),
+    axis.title = element_text(size = 20, face = "bold"),               
+    axis.text = element_text(size = 20, face = "bold")
+  )
+
+ggsave("boston_geospacial_price.png", plot = last_plot(), path ="./plots", dpi = 300)
+```
+
+```{r}
+# Dataframe for price outliers only
+airbnb_df_outliers <- airbnb_df[(airbnb_df$price > upper_bound), ]
+
+# Geospacial plot of Airbnb location data for only outliers
+ggmap(map) +
+  geom_point(data = airbnb_df_outliers,
+            aes(x = longitude, y = latitude, color = price)) +
+  scale_color_gradientn(colors = c("purple", "blue", "green", "yellow", "red")) +
+  geom_point(aes(x = -71.0657, y = 42.3551),
+             shape = 8,
+             size = 3,
+             color = "gold") +
+  geom_point(aes(x = -71.0972, y = 42.3467),
+             shape = 8,
+             size = 3,
+             color = "gold") +
+  labs(x = "Longitude",
+       y = "Latitude",
+       title = "Distribution of Airbnb Listing Outliers in Boston",
+       color = "Price ($)"
+       ) +
+  theme(
+    plot.title = element_text(size = 20, face = "bold"),
+    axis.title = element_text(size = 20, face = "bold"),               
+    axis.text = element_text(size = 20, face = "bold")
+  )
+
+ggsave("boston_geospacial_outliers.png", plot = last_plot(), path ="./plots", dpi = 300)
+
+```

@@ -1,0 +1,22 @@
+```{r}
+install.packages("ggmap")
+install.packages("maps")
+install.packages("sf")
+library(tidyverse)
+library(ggplot2)
+library(ggmap)
+```
+
+```{r}
+calendar_df <- read_csv("./dc_data/calendar.csv.gz")
+#head(calendar_df, 10)
+#colnames(calendar_df)
+#str(calendar_df)
+#summary(calendar_df)
+
+listings_df <- read_csv("./dc_data/listings.csv.gz")
+#head(listings_df, 10)
+#colnames(listings_df)
+#str(listings_df)
+#summary(listings_df)
+```

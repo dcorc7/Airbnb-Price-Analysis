@@ -1,0 +1,365 @@
+```{r}
+# Import libraries
+library(ggplot2)
+library(tidyverse)
+library(ggmap)
+library(maps)
+library(sf)
+```
+
+```{r}
+# Import data
+calendar_df <- read.csv("./dc_data/calendar.csv.gz")
+listings_df <- read.csv("./dc_data/listings.csv.gz")
+reviews_df <- read.csv("./dc_data/reviews.csv.gz")
+
+ncol(listings_df)
+nrow(listings_df)
+sum(is.na(listings_df$price))
+```
+
+```{r}
+# Select only relevant columns
+columns_to_keep <- c("id", "host_id", "host_response_time", "host_response_rate", "host_is_superhost", 
+                    "neighbourhood_cleansed", "property_type", "room_type", "accommodates", "bathrooms", 
+                    "bedrooms", "beds", "amenities", "price", "minimum_nights", "availability_30", "availability_365", 
+                    "number_of_reviews", "last_review", "review_scores_rating", "review_scores_location", 
+                    "reviews_per_month", "longitude", "latitude", "host_identity_verified", "host_total_listings_count")
+
+# Remove all unecessary columns
+airbnb_df <- listings_df[, columns_to_keep]
+sum(is.na(airbnb_df$price))
+
+
+```
+
+
+```{r}
+airbnb_df <- as_tibble(airbnb_df)
+#airbnb_df <- airbnb_df[, c("price", "host_response_rate")]
+#head(airbnb_df, 5)
+
+# Convert "price" to numeric after removing the "$" sign
+airbnb_df$price <- as.numeric(gsub("[$,]", "", airbnb_df$price))
+
+# Convert "host_response_rate" to numeric after removing the "%" sign
+airbnb_df$host_response_rate <- as.numeric(gsub("%", "", airbnb_df$host_response_rate))
+
+sum(is.na(airbnb_df$price))
+
+#airbnb_df <- airbnb_df[!is.na(airbnb_df$longitude), ]
+#airbnb_df <- airbnb_df[!is.na(airbnb_df$latitude), ]
+
+#airbnb_df <- na.omit(airbnb_df)
+nrow(airbnb_df)
+
+
+sum(is.na(airbnb_df$price))
+
+airbnb_df <- airbnb_df[!is.na(airbnb_df$price), ]
+
+
+```
+
+
+```{r}
+# Stadia API necessary to access ggmap
+stadia_maps_api_key <- "47408938-7f6d-4ab3-9cd0-0ff15b953c93"
+register_stadiamaps(stadia_maps_api_key)
+
+# Calculate price mean and sd to remove outliers
+price_mean <- mean(airbnb_df$price)
+price_sd <- sd(airbnb_df$price)
+
+# Calculate IQR to remove price outliers
+Q1 <- quantile(airbnb_df$price, 0.25, na.rm = TRUE)
+Q3 <- quantile(airbnb_df$price, 0.75, na.rm = TRUE)
+IQR <- Q3 - Q1
+upper_bound <- Q3 + (1.5 * IQR)
+print(upper_bound)
+
+# Filter out price outliers (values above the upper_bound)
+airbnb_df_no_outliers <- airbnb_df[(airbnb_df$price <= upper_bound), ]
+
+# Order listings by price
+airbnb_df_no_outliers <- airbnb_df_no_outliers[order(airbnb_df_no_outliers$price, decreasing = FALSE), ]
+
+# Remove NA values in the price column
+airbnb_df_no_outliers <- airbnb_df_no_outliers[!is.na(airbnb_df_no_outliers$price), ]
+nrow(airbnb_df_no_outliers)
+
+```
+
+```{r}
+
+# Create a boundary box for the maps
+bbox <- make_bbox(data = airbnb_df_no_outliers,
+                  lon = longitude,
+                  lat = latitude)
+
+map <- get_stadiamap(bbox,
+                     maptype = "stamen_toner_lite",
+                     zoom = 12)
+
+
+map_types <- c("stamen_terrain", "stamen_toner_lite", "alidade_smooth")
+```
+
+```{r}
+# Geospacial plot of Airbnb location data
+ggmap(map) +
+  geom_point(data = airbnb_df_no_outliers,
+            aes(x = longitude, y = latitude),
+            color = "blue")
+```
+
+```{r}
+library(leaflet)
+
+leaflet(data = airbnb_df_no_outliers) %>%
+  addTiles() %>%
+  addMarkers(~longitude, ~latitude, 
+             clusterOptions = markerClusterOptions())
+```
+
+```{r}
+# load ward data
+ward_df <- read.csv("./dc_data/dc_ward_neighborhood.csv")
+ward_df <- as.tibble(ward_df)
+head(ward_df)
+
+# merge wards_df and airbnb_df_no_outliers so that the ward number appears in the working df
+airbnb_df_no_outliers <- merge(airbnb_df_no_outliers, ward_df, by.x = "neighbourhood_cleansed", by.y = "neighbourhood")
+colnames(airbnb_df_no_outliers)
+airbnb_df_no_outliers$Ward <- as.factor(airbnb_df_no_outliers$Ward)
+
+
+anova <- aov(price ~ Ward, data = airbnb_df_no_outliers)
+summary(anova)
+
+# Count number of airbnbs in each ward and convert the table to a df
+ward_totals_df <- as.data.frame(table(airbnb_df_no_outliers$Ward))
+
+# Varaibles for ward centers
+ward_latitudes <- c(38.925037, 38.897387, 38.931246, 38.959350, 38.925838, 38.881220, 38.889371, 38.845064)
+ward_longitudes <- c(-77.029576, -77.045712, -77.076697, -77.032494,  -76.989407, -77.003655, -76.947521, -77.004685)
+
+# Add the ward centers to the  ward_total_df
+ward_totals_df$latitude <- ward_latitudes
+ward_totals_df$longitude <- ward_longitudes
+
+colnames(ward_totals_df)[colnames(ward_totals_df) == "Freq"] <- "Frequency"
+colnames(ward_totals_df)[colnames(ward_totals_df) == "Var1"] <- "Ward"
+
+print(ward_totals_df)
+str(ward_totals_df)
+
+```
+
+```{r}
+# Bubble map of airbnb counts for each ward
+ggmap(map) +
+  geom_point(data = ward_totals_df,
+             aes(x = longitude, y = latitude, size = Frequency),
+             color = "lightblue", alpha = 0.75) +
+  scale_size_continuous(range = c(15, 30)) +
+  geom_text(data = ward_totals_df,
+            aes(x = longitude, y = latitude, label = Frequency),
+            color = "black", size = 6) +
+  labs(x = "Longitude",
+       y = "Latitude",
+       title = "Number of Airbnb Listings Per DC Ward"
+       ) +
+  theme(
+    plot.title = element_text(size = 20, face = "bold"),
+    axis.title = element_text(size = 20, face = "bold"),               
+    axis.text = element_text(size = 20, face = "bold")
+  )
+
+ggsave("dc_wards.png", plot = last_plot(), path ="./plots", dpi = 300)
+
+```
+
+
+
+```{r}
+# Geospacial plot of Airbnb location data where price is on a color scale
+ggmap(map) +
+  geom_point(data = airbnb_df_no_outliers,
+            aes(x = longitude, y = latitude, color = price)) +
+  scale_color_gradientn(colors = c("purple", "blue", "green", "yellow", "red")) +
+  labs(x = "Longitude",
+       y = "Latitude",
+       title = "Distribution of Airbnb Listings in DC",
+       color = "Price ($)"
+       ) +
+  theme(
+    plot.title = element_text(size = 20, face = "bold"),
+    axis.title = element_text(size = 20, face = "bold"),               
+    axis.text = element_text(size = 20, face = "bold")
+  )
+
+ggsave("dc_geospacial_price.png", plot = last_plot(), path ="./plots", dpi = 300)
+
+```
+
+```{r}
+# Dataframe for price outliers only
+airbnb_df_outliers <- airbnb_df[(airbnb_df$price > upper_bound), ]
+
+# Geospacial plot of Airbnb location data for only outliers
+ggmap(map) +
+  geom_point(data = airbnb_df_outliers,
+            aes(x = longitude, y = latitude, color = price)) +
+  scale_color_gradientn(colors = c("purple", "blue", "green", "yellow", "red")) +
+  geom_point(aes(x = -77.0365, y = 38.8977),
+             shape = 8,
+             size = 3,
+             color = "gold") +
+  geom_point(aes(x = -77.0091, y = 38.8899),
+             shape = 8,
+             size = 3,
+             color = "gold") +
+  geom_point(aes(x = -77.0074, y = 38.8730),
+             shape = 8,
+             size = 3,
+             color = "gold") +
+  labs(x = "Longitude",
+       y = "Latitude",
+       title = "Distribution of Airbnb Listing Outliers in DC",
+       color = "Price ($)"
+       ) +
+  theme(
+    plot.title = element_text(size = 20, face = "bold"),
+    axis.title = element_text(size = 20, face = "bold"),               
+    axis.text = element_text(size = 20, face = "bold")
+  )
+
+ggsave("dc_geospacial_outliers.png", plot = last_plot(), path ="./plots", dpi = 300)
+
+```
+
+```{r}
+# Compute distance between airbnb and a central location (Washington Monument)
+
+#Washington Monument coordinates
+dc_central_lat <- 38.8895
+dc_central_lon <- -77.0353
+dc_geographic_center_lat <- 38.892778
+dc_geographic_center_lat <- -77.040278
+
+haversine_formula <- function(central_lat, central_lon, lat, lon) {
+  # Convert degrees to radians
+  central_lat <- central_lat * pi / 180
+  central_lon <- central_lon * pi / 180
+  lat <- lat * pi / 180
+  lon <- lon * pi / 180
+  
+  # Differences in coordinates
+  dlat <- lat - central_lat
+  dlon <- lon - central_lon
+  
+  # Haversine formula
+  a <- sin(dlat / 2)**2 + cos(central_lat) * cos(lat) * sin(dlon / 2)**2
+  c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+  
+  # Radius of Earth in miles
+  R <- 3958.8
+  
+  # Calculate the distance
+  distance <- R * c
+  return(distance)
+}
+
+airbnb_df_no_outliers$distance_from_city_center <- mapply(haversine_formula, dc_central_lat, dc_central_lon, airbnb_df_no_outliers$latitude, airbnb_df_no_outliers$longitude)
+
+test_df <- airbnb_df_no_outliers[, c("latitude", "longitude", "distance_from_city_center")]
+head(test_df)
+str(test_df$distance_from_city_center)
+```
+
+```{r}
+crime_df <- read.csv("./dc_data/Crime_Incidents_in_2024.csv")
+print(unique(crime_df$OFFENSE))
+
+columns_to_keep <- c("WARD")
+
+crime_df <- crime_df[, columns_to_keep] 
+
+crime_df <- as.data.frame(table(crime_df))
+colnames(crime_df) <- c("Ward", "Total_Crime")
+crime_df$Population <- c(83885, 83162, 77813, 83103, 88965, 106206, 74561, 73200)
+crime_df$Crime_Rate_Per_Capita <- (crime_df$Total_Crime / crime_df$Population)
+
+Q1 <- quantile(crime_df$Crime_Rate_Per_Capita, 0.33)
+Q3 <- quantile(crime_df$Crime_Rate_Per_Capita, 0.66)
+
+crime_df$Crime_Category <- cut(
+  crime_df$Crime_Rate,
+  breaks = c(-Inf, Q1, Q3, Inf),
+  labels = c("Low", "Medium", "High")
+)
+
+columns_to_keep <- c("price", "Ward")
+
+# Remove all unecessary columns
+price_df <- airbnb_df_no_outliers[, columns_to_keep]
+
+avg_df <- aggregate(price_df$price, list(price_df$Ward), FUN = mean)
+colnames(avg_df) <- c("Ward", "avg_price")
+
+merged_df <- merge(crime_df, avg_df, by = "Ward")
+
+merged_df$Ward <- as.factor(merged_df$Ward)
+
+anova_df <- merge(airbnb_df_no_outliers, crime_df, by = "Ward")
+
+columns_to_keep <- c("Ward", "price", "Crime_Category")
+anova_df <- anova_df[, columns_to_keep]
+colnames(anova_df)
+nrow(anova_df)
+anova_df
+
+anova <- aov(price ~ Crime_Category, data = anova_df)
+summary(anova)
+
+
+ggplot(merged_df, aes(x = Ward, y = Crime_Rate_Per_Capita)) +
+  geom_bar(stat = "identity", fill = "lightblue", color = "black") +
+  labs(title = "Crime Rate Per Capita by Ward",
+       x = "Ward",
+       y = "Crime Rate Per Capita") +
+  theme(
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 20, face = "bold"),               
+    axis.text = element_text(size = 20, face = "bold"),
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"), 
+    panel.background = element_blank(),
+    axis.ticks.length = unit(0.4, "cm")
+  ) +
+  scale_x_discrete(expand = c(0.1, 0)) +
+  scale_y_continuous(expand = c(0, 0))
+
+ggsave("dc_crime_rate_by_ward.png", plot = last_plot(), path ="./plots", dpi = 300)
+
+ggplot(merged_df, aes(x = Ward, y = Population)) +
+  geom_bar(stat = "identity", fill = "lightblue", color = "black") +
+  labs(title = "Ward Population",
+       x = "Ward",
+       y = "Population") +
+  theme(
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 20, face = "bold"),               
+    axis.text = element_text(size = 20, face = "bold"),
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black"), 
+    panel.background = element_blank(),
+    axis.ticks.length = unit(0.4, "cm")
+  ) +
+  scale_x_discrete(expand = c(0.1, 0)) +
+  scale_y_continuous(expand = c(0, 0))
+
+ggsave("dc_population_by_ward.png", plot = last_plot(), path ="./plots", dpi = 300)
+
+```

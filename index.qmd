@@ -1,8 +1,6 @@
 ---
 title: Analyzing Airbnb Feature that Influence Rental Pricing Decisions
 ---
-
-
 # Overview
 
 In the face of rising inflation, many travelers are turning to Airbnb for cost-effective accommodations, making it a significant player in the vacation economy. With over five million hosts welcoming two billion guests globally, Airbnb pricing is shaped by amenities, home features, and location. This research investigates how these factors influence prices and examines the impact of neighborhood safety, measured through crime rates, on Airbnb values. Focusing on Washington D.C., Boston, and Chicago, the analysis aims to uncover patterns that help travelers balance safety, comfort, and cost.
@@ -28,3 +26,6 @@ Additionally, Airbnb's has led many hosts to invest in properties, aiming for "S
 Our analysis addressed critical factors influencing Airbnb pricing, focusing on neighborhood/ward, distance to city center, Superhost status, and crime rates across Washington D.C., Boston, and Chicago. Neighborhood and proximity to the city center emerged as the strongest price determinants. Superhost status was moderately significant in Washington D.C. but less impactful in Boston and Chicago, suggesting the need for broader analysis. While crime rates showed statistically significant differences in mean rental prices across categories, more research is required to confirm their influence. Host response rate was not a significant factor. Comparatively, D.C. had the lowest median price and highest outliers, Chicago had the highest median price and spread, and pairwise city comparisons revealed statistically significant yet modest price differences.
 
 These findings offer practical insights for Airbnb’s marketplace. Travelers can use this analysis to balance affordability, amenities, and safety when choosing listings, while hosts can optimize pricing strategies by emphasizing impactful features like amenities and Superhost status. Although price differences across cities were relatively small, Washington D.C. stood out for luxury rentals, making it a top choice for high-end options. This study highlights the importance of understanding local market dynamics to enhance the Airbnb experience for both guests and hosts.
+
+
+The Github repository hosting all code for this project can be found [here](https://github.com/dcorc7/Airbnb-Price-Analysis)
